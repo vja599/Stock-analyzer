@@ -63,10 +63,44 @@ if ticker:
         st.write(f"Day's High: **${high:.2f}**, Day's Low: **${low:.2f}**")
         st.write(f"Your Target Buy Price: **${target_price:.2f}**")
 
+        # 📈 Percentage Scoreboard
+        range_diff = high - low
+        if range_diff > 0:
+            percent_from_low = ((current - low) / range_diff) * 100
+            st.progress(percent_from_low / 100, text=f"{percent_from_low:.2f}% from daily low")
+
+        # ✅ Buy Suggestion Scoreboard
+        st.subheader("📋 Buy Suggestion Scoreboard")
+        score = 0
+        total_factors = 3
+
         if current <= target_price:
             st.success("✅ The stock is at or below your target buy price!")
+            score += 1
         else:
             st.info("📉 The stock is still above your target. Keep watching!")
+
+        if percent_from_low < 30:
+            score += 1
+            st.write("📊 The price is closer to the day's low — good for buying.")
+        else:
+            st.write("⚠️ The price is far from the day's low — may want to wait.")
+
+        # Add new scoring factor: how far current price is from target (normalized)
+        if target_price > 0:
+            closeness_score = max(0, min(1, 1 - abs(current - target_price) / target_price))
+            score += closeness_score  # this is a float between 0 and 1
+
+        percent_score = (score / total_factors) * 100
+        st.write(f"### 🧠 Buy Probability Score: **{percent_score:.1f}%**")
+
+        if percent_score >= 80:
+            st.success("📈 Strong Buy Signal!")
+        elif percent_score >= 50:
+            st.info("🕒 Maybe Buy Soon. Keep an eye on it!")
+        else:
+            st.warning("🚫 Not a good time to buy.")
+
     else:
         st.warning("⚠️ Couldn't retrieve current price data. Try again later.")
 
