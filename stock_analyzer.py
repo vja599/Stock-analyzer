@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import requests
 import os
+FMP_API_KEY = os.getenv("FMP_API_KEY")
 
 # Set page config
 st.set_page_config(page_title="Stock Analyzer", layout="centered")
