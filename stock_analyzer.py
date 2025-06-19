@@ -106,7 +106,7 @@ st.title("📈 Stock Analyzer Web App (with FMP)")
 
 ticker = st.text_input("Enter Stock Ticker (e.g., AAPL)").upper()
 target_price = st.number_input("What price would you like to buy at? ($)", min_value=0.0, step=0.01)
-hold_years = st.slider("How many years do you plan to hold this stock?", 1, 10, 3)
+hold_months = st.slider("📆 Holding Period (in months)", min_value=1, max_value=120, value=1, step=1)
 
 if st.button("Analyze Stock"):
     with st.spinner("Fetching financials..."):
