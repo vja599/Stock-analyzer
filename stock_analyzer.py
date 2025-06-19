@@ -106,7 +106,6 @@ if st.button("Analyze Stock"):
 # --- Sidebar Navigation (for multi-page structure) ---
 st.sidebar.title("SFSA Navigation")
 st.sidebar.markdown("Navigate between different analysis views:")
-st.sidebar.page_link("app.py", label="🔍 Overview", icon="📊")
 st.sidebar.page_link("pages/1_Valuation.py", label="💰 Valuation")
 st.sidebar.page_link("pages/2_Fundamentals.py", label="📂 Fundamentals")
 st.sidebar.page_link("pages/3_Charts.py", label="📈 Charts")
