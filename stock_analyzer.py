@@ -102,7 +102,7 @@ def format_metric(label, value, threshold, higher_is_better=True):
     return f"{emoji} **{label}:** {value:.2f}"
 
 # Streamlit app UI
-st.title("📈 Stock Analyzer Web App (with FMP)")
+st.title("📈 Saini Family Stock Analyzer")
 
 ticker = st.text_input("Enter Stock Ticker (e.g., AAPL)").upper()
 target_price = st.number_input("What price would you like to buy at? ($)", min_value=0.0, step=0.01)
