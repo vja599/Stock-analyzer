@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objs as go
+from datetime import datetime, timedelta
 
 # Load your Finnhub API key securely from Streamlit secrets
 FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]  # Add this to your .streamlit/secrets.toml file
@@ -34,10 +35,9 @@ def get_peers(ticker):
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
-    return None
+    return []
 
 def get_candles(ticker, months):
-    from datetime import datetime, timedelta
     end = int(datetime.now().timestamp())
     start = int((datetime.now() - timedelta(days=30 * months)).timestamp())
     url = f"https://finnhub.io/api/v1/stock/candle?symbol={ticker}&resolution=D&from={start}&to={end}&token={FINNHUB_API_KEY}"
@@ -47,7 +47,11 @@ def get_candles(ticker, months):
         if data.get("s") == "ok":
             df = pd.DataFrame({
                 "Date": pd.to_datetime(data["t"], unit='s'),
-                "Close": data["c"]
+                "Open": data["o"],
+                "High": data["h"],
+                "Low": data["l"],
+                "Close": data["c"],
+                "Volume": data["v"]
             })
             return df
     return None
@@ -97,8 +101,15 @@ if ticker:
         if chart_data is not None:
             st.subheader(f"📉 Price Chart ({chart_months} Months)")
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=chart_data["Date"], y=chart_data["Close"], mode="lines", name="Close Price"))
-            fig.update_layout(title=f"{ticker.upper()} Closing Prices", xaxis_title="Date", yaxis_title="Price (USD)")
+            fig.add_trace(go.Candlestick(
+                x=chart_data["Date"],
+                open=chart_data["Open"],
+                high=chart_data["High"],
+                low=chart_data["Low"],
+                close=chart_data["Close"],
+                name="Candlestick"
+            ))
+            fig.update_layout(title=f"{ticker.upper()} Candlestick Chart", xaxis_title="Date", yaxis_title="Price (USD)")
             st.plotly_chart(fig, use_container_width=True)
 
         if peers:
