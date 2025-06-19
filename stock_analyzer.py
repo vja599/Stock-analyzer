@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import datetime
 import requests
+import os
 
 # Set page config
 st.set_page_config(page_title="Stock Analyzer", layout="centered")
 
 # Your FMP API Key
-FMP_API_KEY = "CZAQTT5zmTJHYqfNV3PoYaiBTUhjdpnO"
+API_KEY = os.getenv("FMP_API_KEY")
 
 # Fetch company profile and financials from FMP
 def fetch_financials(ticker):
@@ -155,7 +156,8 @@ if st.button("Analyze Stock"):
             st.markdown(format_metric("PEG Ratio", financials['peg_ratio'], 1, higher_is_better=False))
             st.markdown(format_metric("Forward P/E", financials['forward_pe'], 20, higher_is_better=False))
 
-            st.caption(f"⏳ Holding period: {hold_years} year(s)")
+            st.caption(f"⏳ Holding period: {hold_months} month(s)")
+
 
             st.subheader("📁 Save Your Analysis")
             result = {
