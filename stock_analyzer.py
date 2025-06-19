@@ -8,7 +8,7 @@ import pandas as pd
 import os
 
 # --- CONFIG ---
-FINNHUB_API_KEY = st.secrets["d19u0q1r01qmm7u1emt0d19u0q1r01qmm7u1emtg"]
+FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
 BASE_URL = "https://finnhub.io/api/v1"
 
 # --- PAGE SETTINGS ---
