@@ -95,7 +95,8 @@ st.title("📊 My Awesome Stock Analyzer")
 
 ticker = st.text_input("Enter Stock Ticker (e.g., AAPL)").upper()
 target_price = st.number_input("Target Buy Price ($)", min_value=0.0, step=0.01)
-hold_months = st.slider("Holding Period (months)", 1, 24, 3)
+hold_months = st.slider("How many months do you plan to hold this stock?", 1, 120, 12)
+
 
 if st.button("Analyze Stock"):
     with st.spinner("Fetching and analyzing..."):
