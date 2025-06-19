@@ -1,19 +1,15 @@
 import streamlit as st
 import requests
 import os
-import openai
-from datetime import datetime
+from openai import OpenAI
 
-# Load API key from environment or Streamlit secrets
+# Load API keys from environment variables or defaults
 API_KEY = os.getenv("FMP_API_KEY", "YOUR_DEFAULT_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY")
 BASE_URL = "https://financialmodelingprep.com/api/v3"
 
-# Warnings for missing API keys
-if API_KEY == "YOUR_DEFAULT_API_KEY":
-    st.warning("⚠️ FMP API key not set properly.")
-if OPENAI_API_KEY == "YOUR_OPENAI_API_KEY":
-    st.warning("⚠️ OpenAI API key not set properly.")
+# Initialize OpenAI client (new SDK style)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 st.set_page_config(page_title="Saini Family Stock Analyzer", layout="wide")
 st.title("📊 Saini Family Stock Analyzer")
@@ -49,24 +45,12 @@ def get_peers(ticker):
 def safe_get(data, key):
     return data[0].get(key) if data and key in data[0] else "N/A"
 
-def format_percent(value):
-    try:
-        return f"{float(value) * 100:.2f}%"
-    except:
-        return "N/A"
-
-def format_number(value):
-    try:
-        return f"{float(value):.2f}"
-    except:
-        return "N/A"
-
 # Confidence scoring system
 def compute_confidence_score(ratios):
     if not ratios:
         return 0
     score = 0
-    max_score = 6
+    max_score = 6  # Total possible
 
     pe_ratio = float(ratios[0].get("peRatioTTM", 0))
     roe = float(ratios[0].get("returnOnEquityTTM", 0))
@@ -90,9 +74,8 @@ def compute_confidence_score(ratios):
 
     return int((score / max_score) * 100)
 
-# AI summary generation
+# Updated AI summary generation with new OpenAI SDK
 def generate_summary(ticker, ratios, confidence):
-    openai.api_key = OPENAI_API_KEY
     if not ratios:
         return "No financial data available to generate a summary."
 
@@ -110,17 +93,14 @@ def generate_summary(ticker, ratios, confidence):
     Summarize the company's strengths and risks for long-term investment.
     """
 
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful financial analyst."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"AI summary generation failed: {e}"
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful financial analyst."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response.choices[0].message.content.strip()
 
 # Main app logic
 if ticker:
@@ -130,6 +110,9 @@ if ticker:
     ratios = get_ratios(ticker)
     quote = get_quote(ticker)
     peers = get_peers(ticker)
+
+    st.subheader("📦 Raw Ratio Data (debug)")
+    st.write(ratios)
 
     if profile and quote:
         col1, col2 = st.columns(2)
@@ -145,33 +128,30 @@ if ticker:
             st.metric("Market Cap", f"${quote[0].get('marketCap', 'N/A'):,}")
             st.metric("Volume", f"{quote[0].get('volume', 'N/A'):,}")
 
-        # Show last updated time if available
-        last_update = quote[0].get("timestamp")
-        if last_update:
-            updated = datetime.utcfromtimestamp(last_update).strftime('%Y-%m-%d')
-            st.caption(f"📅 Data last updated: {updated}")
-
         st.divider()
-        st.subheader("📈 Saini Metrics")
 
+        st.subheader("📈 Saini Metrics")
         if ratios:
             metrics = {
-                "P/E Ratio": ("peRatioTTM", format_number),
-                "Return on Equity (ROE)": ("returnOnEquityTTM", format_percent),
-                "Current Ratio": ("currentRatioTTM", format_number),
-                "Debt/Equity Ratio": ("debtEquityRatioTTM", format_number),
-                "Profit Margin": ("netProfitMarginTTM", format_percent),
-                "Interest Coverage Ratio": ("interestCoverageTTM", format_number)
+                "P/E Ratio": "peRatioTTM",
+                "Return on Equity (ROE)": "returnOnEquityTTM",
+                "Current Ratio": "currentRatioTTM",
+                "Debt/Equity Ratio": "debtEquityRatioTTM",
+                "Profit Margin": "netProfitMarginTTM",
+                "Interest Coverage Ratio": "interestCoverageTTM"
             }
-            for label, (key, formatter) in metrics.items():
-                st.metric(label, formatter(safe_get(ratios, key)))
+            for label, key in metrics.items():
+                st.metric(label, safe_get(ratios, key))
 
+            # Show confidence score
             confidence = compute_confidence_score(ratios)
             st.success(f"📊 Confidence Score: {confidence}%")
 
+            # Add AI Summary
             with st.spinner("Generating AI Summary..."):
                 summary = generate_summary(ticker, ratios, confidence)
                 st.info(summary)
+
         else:
             st.warning("Financial ratios not available.")
 
@@ -180,5 +160,6 @@ if ticker:
         if peers:
             st.subheader("🧝 Peer Comparison")
             st.write(", ".join(peers.get("peersList", [])))
+
     else:
         st.error("Failed to retrieve stock data. Please check the ticker symbol.")
