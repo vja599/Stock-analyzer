@@ -1,122 +1,112 @@
 import streamlit as st
-import plotly.graph_objs as go
 import requests
 import datetime
 
-# ====================== CONFIG ======================
+# --- Configuration ---
+API_KEY = "CZAQTT5zmTJHYqfNV3PoYaiBTUhjdpnO"
 BASE_URL = "https://finnhub.io/api/v1"
-FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
 
-# ====================== HELPERS ======================
-def get_json(endpoint, params=None):
-    if params is None:
-        params = {}
-    params["token"] = FINNHUB_API_KEY
-    url = f"{BASE_URL}/{endpoint}"
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        return response.json()
-    return None
+# --- Helper Functions ---
+def get_historical_data(symbol, months):
+    end_date = datetime.datetime.now()
+    start_date = end_date - datetime.timedelta(days=30 * months)
 
-def get_current_price(ticker):
-    data = get_json(f"quote?symbol={ticker}")
-    if data and all(key in data for key in ["c", "h", "l"]):
-        return {
-            "current": float(data["c"]),
-            "high": float(data["h"]),
-            "low": float(data["l"]),
-        }
-    return None
-
-def get_stock_candles(ticker, months):
-    end = int(datetime.datetime.now().timestamp())
-    start = int((datetime.datetime.now() - datetime.timedelta(days=30 * months)).timestamp())
+    url = f"{BASE_URL}/stock/candle"
     params = {
-        "symbol": ticker,
+        "symbol": symbol,
         "resolution": "D",
-        "from": start,
-        "to": end
+        "from": int(start_date.timestamp()),
+        "to": int(end_date.timestamp()),
+        "token": API_KEY
     }
-    data = get_json("stock/candle", params)
-    if data and data.get("s") == "ok":
-        return data
-    return None
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data if data.get("s") == "ok" else None
 
-# ====================== UI LAYOUT ======================
-st.title("📈 Stock Analyzer with Target Price")
+def get_current_price(symbol):
+    url = f"{BASE_URL}/quote"
+    params = {"symbol": symbol, "token": API_KEY}
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data.get("c")
 
-ticker = st.text_input("Enter a stock ticker:", "AAPL").upper()
-months = st.slider("Select data range (in months):", 1, 120, 6)
+def get_fundamentals(symbol):
+    url = f"{BASE_URL}/stock/metric"
+    params = {
+        "symbol": symbol,
+        "metric": "all",
+        "token": API_KEY
+    }
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data.get("metric")
 
-if ticker:
-    # 🎯 Target Price Section
-    st.subheader("🎯 Set Your Target Buy Price")
-    target_price = st.number_input(f"Enter your target buy price for {ticker}:", min_value=0.0, step=0.01)
+def evaluate_stock(current_price, target_price, pe_ratio, revenue_growth):
+    if current_price <= 0 or target_price <= 0:
+        return "Invalid inputs", "⚠️"
 
-    price_info = get_current_price(ticker)
-    if price_info:
-        current = price_info["current"]
-        high = price_info["high"]
-        low = price_info["low"]
+    score = 0
 
-        st.write(f"Current Price: **${current:.2f}**")
-        st.write(f"Day's High: **${high:.2f}**, Day's Low: **${low:.2f}**")
-        st.write(f"Your Target Buy Price: **${target_price:.2f}**")
+    # Price vs Target
+    ratio = target_price / current_price
+    if ratio >= 1.2:
+        score += 2
+    elif 0.9 <= ratio < 1.2:
+        score += 1
 
-        # 📈 Percentage Scoreboard
-        range_diff = high - low
-        if range_diff > 0:
-            percent_from_low = ((current - low) / range_diff) * 100
-            st.progress(percent_from_low / 100, text=f"{percent_from_low:.2f}% from daily low")
+    # P/E Ratio
+    if pe_ratio and pe_ratio < 20:
+        score += 2
+    elif pe_ratio and pe_ratio < 35:
+        score += 1
 
-        # ✅ Buy Suggestion Scoreboard
-        st.subheader("📋 Buy Suggestion Scoreboard")
-        score = 0
-        total_factors = 3
+    # Revenue Growth
+    if revenue_growth and revenue_growth > 0.10:
+        score += 2
+    elif revenue_growth and revenue_growth > 0.03:
+        score += 1
 
-        if current <= target_price:
-            st.success("✅ The stock is at or below your target buy price!")
-            score += 1
-        else:
-            st.info("📉 The stock is still above your target. Keep watching!")
-
-        if percent_from_low < 30:
-            score += 1
-            st.write("📊 The price is closer to the day's low — good for buying.")
-        else:
-            st.write("⚠️ The price is far from the day's low — may want to wait.")
-
-        # Add new scoring factor: how far current price is from target (normalized)
-        if target_price > 0:
-            closeness_score = max(0, min(1, 1 - abs(current - target_price) / target_price))
-            score += closeness_score  # this is a float between 0 and 1
-
-        percent_score = (score / total_factors) * 100
-        st.write(f"### 🧠 Buy Probability Score: **{percent_score:.1f}%**")
-
-        if percent_score >= 80:
-            st.success("📈 Strong Buy Signal!")
-        elif percent_score >= 50:
-            st.info("🕒 Maybe Buy Soon. Keep an eye on it!")
-        else:
-            st.warning("🚫 Not a good time to buy.")
-
+    if score >= 5:
+        return "Strong Buy", "✅"
+    elif score >= 3:
+        return "Hold", "🤔"
     else:
-        st.warning("⚠️ Couldn't retrieve current price data. Try again later.")
+        return "Avoid", "❌"
 
-    # 📊 Interactive Line Chart Section
-    st.subheader("📉 Stock Price History")
-    candles = get_stock_candles(ticker, months)
-    if candles:
-        dates = [datetime.datetime.fromtimestamp(ts) for ts in candles["t"]]
-        prices = candles["c"]
+# --- Streamlit UI ---
+st.set_page_config(page_title="SFSA - Saini Family Stock Analyzer")
+st.title("📊 SFSA - Saini Family Stock Analyzer")
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=dates, y=prices, mode='lines', name='Close Price'))
-        fig.update_layout(title=f"{ticker} Stock Price - Last {months} Months",
-                          xaxis_title='Date',
-                          yaxis_title='Price (USD)',
-                          template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error("Failed to load stock chart data.")
+symbol = st.text_input("Enter Stock Ticker (e.g., AAPL, MSFT):", "AAPL")
+months = st.slider("Select time range for analysis (months):", min_value=1, max_value=120, value=12)
+target_price = st.number_input("Enter your target buy price ($):", min_value=0.01, value=150.00, step=0.01)
+
+if st.button("Analyze Stock"):
+    with st.spinner("Fetching data and evaluating..."):
+        current_price = get_current_price(symbol)
+        historical_data = get_historical_data(symbol, months)
+        fundamentals = get_fundamentals(symbol)
+
+        if current_price is None or historical_data is None or fundamentals is None:
+            st.error("Failed to retrieve stock data. Check the ticker symbol or try again later.")
+        else:
+            pe_ratio = fundamentals.get("peNormalizedAnnual")
+            revenue_growth = fundamentals.get("revenueGrowthYearOverYear")
+
+            st.subheader(f"📈 Current Price for {symbol.upper()}: ${current_price:.2f}")
+            st.write(f"P/E Ratio: {pe_ratio:.2f}" if pe_ratio else "P/E Ratio: N/A")
+            st.write(f"Revenue Growth YoY: {revenue_growth:.2%}" if revenue_growth else "Revenue Growth YoY: N/A")
+
+            recommendation, icon = evaluate_stock(current_price, target_price, pe_ratio, revenue_growth)
+            st.success(f"Recommendation: {icon} {recommendation}")
+
+            st.line_chart(historical_data['c'])
+            st.caption("Closing price chart over selected period.")
+
+# --- Sidebar Navigation (for multi-page structure) ---
+st.sidebar.title("SFSA Navigation")
+st.sidebar.markdown("Navigate between different analysis views:")
+st.sidebar.page_link("app.py", label="🔍 Overview", icon="📊")
+st.sidebar.page_link("pages/1_Valuation.py", label="💰 Valuation")
+st.sidebar.page_link("pages/2_Fundamentals.py", label="📂 Fundamentals")
+st.sidebar.page_link("pages/3_Charts.py", label="📈 Charts")
