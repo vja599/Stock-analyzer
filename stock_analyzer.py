@@ -91,7 +91,7 @@ def get_recommendation(score):
 # 🚀 Streamlit UI
 # =======================
 
-st.title("📈 Stock Analyzer Web App")
+st.title("📊 My Awesome Stock Analyzer")
 
 ticker = st.text_input("Enter Stock Ticker (e.g., AAPL)").upper()
 target_price = st.number_input("Target Buy Price ($)", min_value=0.0, step=0.01)
