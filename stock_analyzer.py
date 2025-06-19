@@ -1,15 +1,10 @@
 import streamlit as st
 import requests
 import os
-from openai import OpenAI
 
 # Load API keys from environment variables or defaults
 API_KEY = os.getenv("FMP_API_KEY", "YOUR_DEFAULT_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY")
 BASE_URL = "https://financialmodelingprep.com/api/v3"
-
-# Initialize OpenAI client (new SDK style)
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 st.set_page_config(page_title="Saini Family Stock Analyzer", layout="wide")
 st.title("📊 Saini Family Stock Analyzer")
@@ -45,7 +40,7 @@ def get_peers(ticker):
 def safe_get(data, key):
     return data[0].get(key) if data and key in data[0] else "N/A"
 
-# Confidence scoring system
+# Confidence scoring system (optional, but no AI)
 def compute_confidence_score(ratios):
     if not ratios:
         return 0
@@ -74,34 +69,6 @@ def compute_confidence_score(ratios):
 
     return int((score / max_score) * 100)
 
-# Updated AI summary generation with new OpenAI SDK
-def generate_summary(ticker, ratios, confidence):
-    if not ratios:
-        return "No financial data available to generate a summary."
-
-    prompt = f"""
-    Write an investor-friendly analysis summary of the stock {ticker}. Use the following financial data:
-
-    P/E Ratio: {safe_get(ratios, 'peRatioTTM')}
-    ROE: {safe_get(ratios, 'returnOnEquityTTM')}
-    Current Ratio: {safe_get(ratios, 'currentRatioTTM')}
-    Debt/Equity: {safe_get(ratios, 'debtEquityRatioTTM')}
-    Profit Margin: {safe_get(ratios, 'netProfitMarginTTM')}
-    Interest Coverage: {safe_get(ratios, 'interestCoverageTTM')}
-    Confidence Score: {confidence}%
-
-    Summarize the company's strengths and risks for long-term investment.
-    """
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful financial analyst."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content.strip()
-
 # Main app logic
 if ticker:
     st.subheader(f"🔍 Analyzing {ticker.upper()}")
@@ -110,9 +77,6 @@ if ticker:
     ratios = get_ratios(ticker)
     quote = get_quote(ticker)
     peers = get_peers(ticker)
-
-    st.subheader("📦 Saini Metrics ")
-
 
     if profile and quote:
         col1, col2 = st.columns(2)
@@ -146,11 +110,6 @@ if ticker:
             # Show confidence score
             confidence = compute_confidence_score(ratios)
             st.success(f"📊 Confidence Score: {confidence}%")
-
-            # Add AI Summary
-            with st.spinner("Generating AI Summary..."):
-                summary = generate_summary(ticker, ratios, confidence)
-                st.info(summary)
 
         else:
             st.warning("Financial ratios not available.")
