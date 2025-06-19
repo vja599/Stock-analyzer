@@ -111,8 +111,8 @@ if ticker:
     quote = get_quote(ticker)
     peers = get_peers(ticker)
 
-    st.subheader("📦 Raw Ratio Data (debug)")
-    st.write(ratios)
+    st.subheader("📦 Saini Metrics ")
+
 
     if profile and quote:
         col1, col2 = st.columns(2)
