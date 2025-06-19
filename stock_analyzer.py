@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
-import os
+import pandas as pd
+import plotly.graph_objs as go
 
-# Load API keys from environment variables or defaults
-API_KEY = os.getenv("FMP_API_KEY", "YOUR_DEFAULT_API_KEY")
-BASE_URL = "https://financialmodelingprep.com/api/v3"
+# Load your Finnhub API key securely from Streamlit secrets
+FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]  # Add this to your .streamlit/secrets.toml file
 
 st.set_page_config(page_title="Saini Family Stock Analyzer", layout="wide")
 st.title("📊 Saini Family Stock Analyzer")
@@ -12,60 +12,56 @@ st.title("📊 Saini Family Stock Analyzer")
 # User inputs
 ticker = st.text_input("Enter Stock Ticker (e.g. AAPL)", "AAPL")
 hold_months = st.slider("Planned Holding Period (in months)", min_value=1, max_value=120, value=1)
+chart_months = st.slider("Chart Time Range (in months)", min_value=1, max_value=120, value=6)
 
-# Utility functions
-def get_json(endpoint):
-    url = f"{BASE_URL}/{endpoint}&apikey={API_KEY}" if "?" in endpoint else f"{BASE_URL}/{endpoint}?apikey={API_KEY}"
+# Utility functions using Finnhub
+def get_quote(ticker):
+    url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
     return None
 
 def get_profile(ticker):
-    return get_json(f"profile/{ticker}")
-
-def get_ratios(ticker):
-    data = get_json(f"ratios-ttm/{ticker}")
-    if not data:
-        st.warning("No ratio data returned. Trying alternative endpoint...")
-        data = get_json(f"ratios/{ticker}?limit=1")
-    return data
-
-def get_quote(ticker):
-    return get_json(f"quote/{ticker}")
+    url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={FINNHUB_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return None
 
 def get_peers(ticker):
-    return get_json(f"stock_peers?symbol={ticker}")
+    url = f"https://finnhub.io/api/v1/stock/peers?symbol={ticker}&token={FINNHUB_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return None
 
-def safe_get(data, key):
-    return data[0].get(key) if data and key in data[0] else "N/A"
+def get_candles(ticker, months):
+    from datetime import datetime, timedelta
+    end = int(datetime.now().timestamp())
+    start = int((datetime.now() - timedelta(days=30 * months)).timestamp())
+    url = f"https://finnhub.io/api/v1/stock/candle?symbol={ticker}&resolution=D&from={start}&to={end}&token={FINNHUB_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("s") == "ok":
+            df = pd.DataFrame({
+                "Date": pd.to_datetime(data["t"], unit='s'),
+                "Close": data["c"]
+            })
+            return df
+    return None
 
-# Confidence scoring system (optional, but no AI)
-def compute_confidence_score(ratios):
-    if not ratios:
-        return 0
+def compute_score(quote):
     score = 0
-    max_score = 6  # Total possible
+    max_score = 3
 
-    pe_ratio = float(ratios[0].get("peRatioTTM", 0))
-    roe = float(ratios[0].get("returnOnEquityTTM", 0))
-    current_ratio = float(ratios[0].get("currentRatioTTM", 0))
-    debt_equity = float(ratios[0].get("debtEquityRatioTTM", 0))
-    profit_margin = float(ratios[0].get("netProfitMarginTTM", 0))
-    interest_coverage = float(ratios[0].get("interestCoverageTTM", 0))
-
-    if 5 < pe_ratio < 25:
-        score += 1
-    if roe > 0.15:
-        score += 1
-    if current_ratio >= 1.5:
-        score += 1
-    if debt_equity < 1:
-        score += 1
-    if profit_margin > 0.1:
-        score += 1
-    if interest_coverage > 3:
-        score += 1
+    if quote.get("c", 0) > quote.get("pc", 0):
+        score += 1  # Current price is higher than previous close
+    if quote.get("h", 0) - quote.get("l", 0) > 0:
+        score += 1  # Price range exists
+    if quote.get("c", 0) != 0:
+        score += 1  # Stock is active
 
     return int((score / max_score) * 100)
 
@@ -74,51 +70,50 @@ if ticker:
     st.subheader(f"🔍 Analyzing {ticker.upper()}")
 
     profile = get_profile(ticker)
-    ratios = get_ratios(ticker)
     quote = get_quote(ticker)
     peers = get_peers(ticker)
+    chart_data = get_candles(ticker, chart_months)
 
     if profile and quote:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.image(profile[0].get("image"), width=100)
-            st.metric("Company Name", profile[0].get("companyName"))
-            st.metric("Industry", profile[0].get("industry"))
-            st.metric("Exchange", profile[0].get("exchange"))
+            st.image(profile.get("logo"), width=100)
+            st.metric("Company Name", profile.get("name", "N/A"))
+            st.metric("Industry", profile.get("finnhubIndustry", "N/A"))
+            st.metric("Exchange", profile.get("exchange", "N/A"))
 
         with col2:
-            st.metric("Current Price", f"${quote[0].get('price', 'N/A')}")
-            st.metric("Market Cap", f"${quote[0].get('marketCap', 'N/A'):,}")
-            st.metric("Volume", f"{quote[0].get('volume', 'N/A'):,}")
+            st.metric("Current Price", f"${quote.get('c', 'N/A')}")
+            st.metric("High Price", f"${quote.get('h', 'N/A')}")
+            st.metric("Low Price", f"${quote.get('l', 'N/A')}")
+            score = compute_score(quote)
+            st.metric("Stock Score", f"{score}%")
 
         st.divider()
 
-        st.subheader("📈 Saini Metrics")
-        if ratios:
-            metrics = {
-                "P/E Ratio": "peRatioTTM",
-                "Return on Equity (ROE)": "returnOnEquityTTM",
-                "Current Ratio": "currentRatioTTM",
-                "Debt/Equity Ratio": "debtEquityRatioTTM",
-                "Profit Margin": "netProfitMarginTTM",
-                "Interest Coverage Ratio": "interestCoverageTTM"
-            }
-            for label, key in metrics.items():
-                st.metric(label, safe_get(ratios, key))
-
-            # Show confidence score
-            confidence = compute_confidence_score(ratios)
-            st.success(f"📊 Confidence Score: {confidence}%")
-
-        else:
-            st.warning("Financial ratios not available.")
-
         st.caption(f"⏳ Holding period: {hold_months} month(s)")
+
+        if chart_data is not None:
+            st.subheader(f"📉 Price Chart ({chart_months} Months)")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=chart_data["Date"], y=chart_data["Close"], mode="lines", name="Close Price"))
+            fig.update_layout(title=f"{ticker.upper()} Closing Prices", xaxis_title="Date", yaxis_title="Price (USD)")
+            st.plotly_chart(fig, use_container_width=True)
 
         if peers:
             st.subheader("🧝 Peer Comparison")
-            st.write(", ".join(peers.get("peersList", [])))
+            st.write(", ".join(peers))
+
+        st.markdown("""
+        ### 🧠 Stock Market Basics
+        - **Ticker**: A symbol representing a publicly traded company.
+        - **Current Price**: The most recent trading price.
+        - **High/Low**: Highest and lowest prices during a trading session.
+        - **Peers**: Other companies in the same sector or industry.
+        - **Candlestick/Line Chart**: Visual representation of stock price over time.
+        - **Stock Score**: A basic quality score based on activity and pricing trend.
+        """)
 
     else:
         st.error("Failed to retrieve stock data. Please check the ticker symbol.")
