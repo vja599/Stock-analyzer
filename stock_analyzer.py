@@ -10,7 +10,6 @@ BASE_URL = "https://finnhub.io/api/v1"
 def get_historical_data(symbol, months):
     end_date = datetime.datetime.now()
     start_date = end_date - datetime.timedelta(days=30 * months)
-
     url = f"{BASE_URL}/stock/candle"
     params = {
         "symbol": symbol,
@@ -25,27 +24,49 @@ def get_historical_data(symbol, months):
 
 def get_current_price(symbol):
     url = f"{BASE_URL}/quote"
-    params = {"symbol": symbol, "token": API_KEY}
-    response = requests.get(url, params=params)
-    data = response.json()
-    return data.get("c")
+    response = requests.get(url, params={"symbol": symbol, "token": API_KEY})
+    return response.json().get("c")
 
 def get_fundamentals(symbol):
     url = f"{BASE_URL}/stock/metric"
-    params = {
-        "symbol": symbol,
-        "metric": "all",
-        "token": API_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
-    return data.get("metric")
+    response = requests.get(url, params={"symbol": symbol, "metric": "all", "token": API_KEY})
+    return response.json().get("metric")
 
 def evaluate_stock(current_price, target_price, pe_ratio, revenue_growth):
     if current_price <= 0 or target_price <= 0:
-        return "Invalid inputs", "⚠️"
+        return "Invalid inputs", "⚠️", 0
 
     score = 0
+    max_score = 6
+
+    # Price vs Target
+    ratio = target_price / current_price
+    if ratio >= 1.2:
+        score += 2
+    elif 0.9 <= ratio < 1.2:
+        score += 1
+
+    # P/E Ratio
+    if pe_ratio and pe_ratio < 20:
+        score += 2
+    elif pe_ratio and pe_ratio < 35:
+        score += 1
+
+    # Revenue Growth
+    if revenue_growth and revenue_growth > 0.10:
+        score += 2
+    elif revenue_growth and revenue_growth > 0.03:
+        score += 1
+
+    confidence = round((score / max_score) * 100)
+
+    if score >= 5:
+        return "Strong Buy", "✅", confidence
+    elif score >= 3:
+        return "Hold", "🤔", confidence
+    else:
+        return "Avoid", "❌", confidence
+
 
     # Price vs Target
     ratio = target_price / current_price
@@ -78,7 +99,7 @@ st.set_page_config(page_title="SFSA - Saini Family Stock Analyzer")
 st.title("📊 SFSA - Saini Family Stock Analyzer")
 
 symbol = st.text_input("Enter Stock Ticker (e.g., AAPL, MSFT):", "AAPL")
-months = st.slider("Select time range for analysis (months):", min_value=1, max_value=120, value=12)
+months = st.slider("Select time range for analysis (months):", 1, 120, 12)
 target_price = st.number_input("Enter your target buy price ($):", min_value=0.01, value=150.00, step=0.01)
 
 if st.button("Analyze Stock"):
@@ -97,15 +118,10 @@ if st.button("Analyze Stock"):
             st.write(f"P/E Ratio: {pe_ratio:.2f}" if pe_ratio else "P/E Ratio: N/A")
             st.write(f"Revenue Growth YoY: {revenue_growth:.2%}" if revenue_growth else "Revenue Growth YoY: N/A")
 
-            recommendation, icon = evaluate_stock(current_price, target_price, pe_ratio, revenue_growth)
-            st.success(f"Recommendation: {icon} {recommendation}")
+            recommendation, icon, confidence = evaluate_stock(current_price, target_price, pe_ratio, revenue_growth)
+            st.success(f"{icon} **{recommendation}** — Confidence Score: **{confidence}%**")
+
+            
 
             st.line_chart(historical_data['c'])
             st.caption("Closing price chart over selected period.")
-
-# --- Sidebar Navigation (for multi-page structure) ---
-st.sidebar.title("SFSA Navigation")
-st.sidebar.markdown("Navigate between different analysis views:")
-st.sidebar.page_link("pages/1_Valuation.py", label="💰 Valuation")
-st.sidebar.page_link("pages/2_Fundamentals.py", label="📂 Fundamentals")
-st.sidebar.page_link("pages/3_Charts.py", label="📈 Charts")
