@@ -3,7 +3,7 @@ import requests
 import datetime
 
 # --- Configuration ---
-API_KEY = "CZAQTT5zmTJHYqfNV3PoYaiBTUhjdpnO"
+API_KEY = "d19u0q1r01qmm7u1emt0d19u0q1r01qmm7u1emtg"
 BASE_URL = "https://finnhub.io/api/v1"
 
 # --- Helper Functions ---
